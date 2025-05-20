@@ -4,6 +4,7 @@ import RoomDetail from '../components/detail/RoomDetail.vue'
 import { useRoomStore } from '../store/rooms'
 import { storeToRefs } from 'pinia'
 
+
 const roomStore = useRoomStore()
 const { showDetail } = storeToRefs(roomStore)
 </script>

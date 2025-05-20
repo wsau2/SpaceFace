@@ -36,3 +36,9 @@ export async function fetchSpaceProvider(
 
   return SpaceProvider.parse(JSON.parse(data.value ?? ''))
 }
+
+export async function fetchItems(page: number): Promise<any[]> {
+  const response = await fetch(`https://spaceprovider.up.railway.app/api/v1?page=${page}`);
+  if (!response.ok) throw new Error('Failed to fetch items');
+  return await response.json();
+}
