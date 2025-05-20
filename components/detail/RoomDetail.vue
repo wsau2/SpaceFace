@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { defineAsyncComponent, ref } from 'vue'
-import { useTimeAgo } from '@vueuse/core'
+import { ref, onMounted, computed } from 'vue'
 import { storeToRefs } from 'pinia'
+import axios from 'axios'
 import { useRoomStore } from '../../store/rooms'
 import RoomLabel from '../shared/RoomLabel.vue'
 import LargeCircularButton from '../shared/LargeCircularButton.vue'
@@ -9,17 +9,20 @@ import BackNavigate from '../detail/BackNavigate.vue'
 import RoomAvailability from './RoomAvailability.vue'
 import RoomImageDisplay from './RoomImageDisplay.vue'
 import RectButton from '../shared/RectButton.vue'
-import { fetchBlockMap } from '../../utils/query'
 
-const roomStore = useRoomStore()
+const { currDetailRoom } = storeToRefs(useRoomStore())
+const { toggleDetail, getRoomAvailability } = useRoomStore()
 
 const favorite = ref(false)
 
-const labels = ['OUTLETS', 'NO_OUTLETS', 'WHITEBOARD', 'CHALKBOARD'] as const
-
-// replace this with last_edited from space provider
-const lastEdited = useTimeAgo(Date.now())
-const room = 'ILC-N151'
+const labels = currDetailRoom.value.labels
+const capacity = currDetailRoom.value.capacity
+const lastEdited = new Date(currDetailRoom.value.last_edited).toLocaleDateString()
+const room = currDetailRoom.value.building + ' ' + currDetailRoom.value.room
+const images = currDetailRoom.value.images
+const gps_coords = currDetailRoom.value.gps_coords
+const accessNotes = currDetailRoom.value.access_notes
+const availability = currDetailRoom.value.availability
 
 const fileIssue = (type: 'issue' | 'feedback') => {
   const title = type === 'issue' ? 'Report Issue' : 'Feedback'
@@ -37,22 +40,32 @@ const editRoom = () => {
   window.open(`https://spaceprovider.up.railway.app/admin?room=${room}`, '_blank')
 }
 const googleMaps = () => {
-  window.open(`https://www.google.com/maps/@42.3937021,-72.5315629,14z?entry=ttu`, '_blank')
+  window.open(
+    `https://www.google.com/maps/search/?api=1&query=${gps_coords.coordinates[1]}%2C${gps_coords.coordinates[0]}`,
+    '_blank'
+  )
 }
+
+onMounted(async () => {
+  if (currDetailRoom.value.images.length > 1) return console.log('Images already loaded')
+
+  const url = `https://spaceprovider.up.railway.app/api/v1?room=${currDetailRoom.value.building}-${currDetailRoom.value.room}`
+
+  await axios.get(url).then((res) => {
+    if (!res?.data?.images) return console.error('No images found for this room')
+    for (let i = 0; i < res.data.images.length; i++) {
+      currDetailRoom.value.images.push(res.data.images[i])
+    }
+  })
+})
 </script>
 
 <template>
   <div class="w-screen h-screen">
-    <BackNavigate @click.stop="roomStore.toggleDetail()" />
+    <BackNavigate @click.stop="toggleDetail()" />
 
     <!-- images carousel - implement this with swiper.js! -->
-    <RoomImageDisplay
-      :images="[
-        '/images/ILC.jpeg',
-        'https://www.umass.edu/cp/sites/default/files/Integrative%20Learning%20Center%20%28ILC%29_02.jpg',
-        'https://www.umass.edu/cp/sites/default/files/Integrative%20Learning%20Center%20%28ILC%29_04.jpg'
-      ]"
-    />
+    <RoomImageDisplay :images="images" notFound="/images/imageNotFound.jpg" />
 
     <!-- popover tab -->
     <div
@@ -67,7 +80,7 @@ const googleMaps = () => {
           </div>
 
           <!-- title -->
-          <h1 class="text-5xl font-bold">ILC N151</h1>
+          <h1 class="text-5xl font-bold">{{ room }}</h1>
 
           <!-- availability -->
           <span class="text-2xl font-light"> Study Here Until 10pm </span>
@@ -89,18 +102,23 @@ const googleMaps = () => {
         </div>
       </div>
 
+      <!-- Access notes -->
+      <p class="font-light px-2">{{ accessNotes }}</p>
+
       <!-- availability detail -->
       <RoomAvailability
-        :availability="roomStore.getRoomAvailability('BART_0065')"
+        :building="currDetailRoom.building"
+        :room="currDetailRoom.room"
         class="mt-[90px]"
       />
+
 
       <div class="px-2 mb-10">
         <!-- additional info -->
         <div class="my-8 flex justify-between">
           <div class="text-2xl font-semibold">
             <div>Capacity</div>
-            <div class="font-light">200</div>
+            <div class="font-light">{{ capacity }}</div>
           </div>
 
           <div class="text-2xl font-semibold text-right">

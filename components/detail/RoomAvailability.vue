@@ -1,15 +1,29 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import { BlockMapType } from '../../utils/ZodTypes'
 import MultiSelect from '../shared/MultiSelect.vue'
 import CalendarBlock from './CalendarBlock.vue'
-import { BlockMapType } from '../../utils/ZodTypes'
-
-import { useCounter } from '../../composables/counter'
+import {isAvailable} from '../shared/isAvailable'
 import { useRoomStore } from '../../store/rooms'
 const roomStore = useRoomStore()
 
-const { count, increment, double } = useCounter(20)
-const counter2 = useCounter(15)
+const blockData = ref<BlockMapType>({
+  building_code: '',
+  room_code: '',
+  Blocks: {
+    Sun: [],
+    Mon: [],
+    Tue: [],
+    Wed: [],
+    Thu: [],
+    Fri: [],
+    Sat: []
+  }
+})
+
+const block = computed(() => blockData.value['Blocks'])
+
+const loading = ref(false)
 
 const DAYS_OF_WEEK = [
   { value: 'Sun', label: 'sun' },
@@ -21,55 +35,79 @@ const DAYS_OF_WEEK = [
   { value: 'Sat', label: 'sat' }
 ] as const
 
-type Day = (typeof DAYS_OF_WEEK)[number]['value']
-
-const selectedDay = ref<Day>('Mon')
+const currentDate = new Date();
+const days = DAYS_OF_WEEK.map(({ value }) => value)
+const selectedDay = ref(days[currentDate.getDay()])
 
 const props = defineProps<{
-  availability: BlockMapType
-  // take a prop that contains data from block map corresponding to the room
-  // this will need to get parsed out a bit
+  building: string,
+  room: string,
 }>()
+
+onMounted(async () => {
+  loading.value = true
+  if (!roomStore.currDetailRoom.availability["ERROR"]) {
+    blockData.value = roomStore.currDetailRoom.availability
+  }
+  loading.value = false
+
+  // Set room availability every second
+  updateIsReady();
+  setInterval(updateIsReady, 30000)
+})
+
+// Ref for room availability
+const isReady = ref(true)
+
+// Updates isReady
+function updateIsReady() {
+  if (roomStore.showDetail) {
+    isReady.value = isAvailable(blockData.value).open;
+  }
+}
 </script>
 
 <template>
   <div>
     <div class="flex justify-between items-center my-1 px-3">
       <!-- title -->
-      <h1 class="text-4xl font-semibold">Availability</h1>
+      <h1 class="text-4xl font-semibold">
+        Availability
+      </h1>
 
       <!-- emblem -->
-      <span class="bg-green-500 text-white px-3 rounded-full shadow-gray-400 shadow-sm">
-        ready now
+      <span class="bg-green-500 text-white px-3 rounded-full shadow-gray-400 shadow-sm" :class="{'bg-green-500' : isReady, 'bg-red-500' : !isReady}">
+        {{isReady ? "ready now" : "not ready"}}
       </span>
     </div>
 
     <!-- content -->
     <div class="bg-gray-200 p-5 flex flex-col gap-3 rounded-2xl">
       <!-- select day of week -->
-      <MultiSelect v-model="selectedDay" :options="DAYS_OF_WEEK" />
-      <!-- come up with design and fill in with data computed from block map -->
-      <!-- this may be a new component -->
+      <MultiSelect
+        v-model="selectedDay"
+        :options="DAYS_OF_WEEK"
+      />
 
       <div
-        v-if="!roomStore.isLoadingRoomAvailability"
-        v-for="i in props.availability.Blocks[selectedDay].length"
-        :key="i"
+        v-if="block[selectedDay]"
+        v-for="[start, end] in block[selectedDay]"
+        :key="start"
       >
         <CalendarBlock
-          :start="props.availability.Blocks[selectedDay][i - 1][0]"
-          :end="props.availability.Blocks[selectedDay][i - 1][1]"
+          :start="start"
+          :end="end"
         />
       </div>
-      <div v-else>Loading...</div>
 
-      <!-- <button @click="increment" class="bg-gray-800 p-3 text-white font-bold text-2xl">
-        {{ count }} - {{ double }}
-      </button>
+      <div v-if="loading">
+        Loading...
+      </div>
 
-      <button @click="counter2.increment" class="bg-gray-800 p-3 text-white font-bold text-2xl">
-        {{ counter2.count }}
-      </button> -->
+      <div v-else-if="block[selectedDay].length === 0">
+        Nothing is blocking this room on {{ selectedDay.toLowerCase() }}
+      </div>
+
     </div>
   </div>
 </template>

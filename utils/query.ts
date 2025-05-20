@@ -1,26 +1,40 @@
-import { SpaceProviderType, SpaceProvider, BlockMapType, BlockMap } from './ZodTypes'
+import { resolve } from 'path'
+import {
+  Room,
+  RoomType,
+  SpaceProviderType,
+  SpaceProvider,
+  BlockMapType,
+  BlockMap
+} from './ZodTypes'
 import { useFetch } from '@vueuse/core'
 
-//Query SpaceProvider
-export async function fetchSpaceProvider(q: string | null): Promise<SpaceProviderType | null> {
-  //Make sure we don't query a null string
-  if (!q) q = ''
-  const { data } = await useFetch<string>(
-    `https://spaceprovider.up.railway.app/api/v1?q=${q}&page=1&limit=10`
-  ).get()
-  // if (!data) throw new Error('No data found')
-  return SpaceProvider.parse(JSON.parse(data.value ?? ''))
-}
+const SPACE_PROVIDER_URI = 'https://spaceprovider.up.railway.app/api/v1'
 
-//Query BlockMap
-export async function fetchBlockMap(roomId: string | null): Promise<BlockMapType | null> {
-  //Make sure we don't query a null string
-  if (!roomId) roomId = ''
+export async function fetchSpaceProvider(
+  q: string,
+  filterArr: string[],
+  page: number
+): Promise<SpaceProviderType> {
+  console.log('fetching SpaceProvider')
+  // Note from Will: Latitude and longitude isnt working smoothly for me, so its commented out
+  // const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+  //   navigator.geolocation.getCurrentPosition(resolve, reject)
+  // })
+  // const lat = position.coords.latitude
+  // const lon = position.coords.longitude
+  // console.log(`Fetching SpaceProvider with query: ${q}`, `lat: ${lat}`, `lon: ${lon}, `, filterArr)
+
+  // Parse filterArr into queryable string
+  let filterQuery = ''
+  filterArr.forEach((label) => (filterQuery += ' label:' + label))
+  // console.log(`${SPACE_PROVIDER_URI}?q=${q}${filterQuery}&page=${page}&limit=10`)
+
   const { data } = await useFetch<string>(
-    `https://blockmap.onrender.com/room?roomId=${roomId}`
+    `${SPACE_PROVIDER_URI}?q=${q}${filterQuery}&page=${page}&limit=10`
   ).get()
-  // if (!data) throw new Error('No data found')
-  return BlockMap.parse(JSON.parse(data.value ?? ''))
+
+  return SpaceProvider.parse(JSON.parse(data.value ?? ''))
 }
 
 export async function fetchItems(page: number): Promise<any[]> {

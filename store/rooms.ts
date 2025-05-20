@@ -1,86 +1,82 @@
-import { ref } from 'vue'
 import { defineStore } from 'pinia'
-import { BlockMapType, SpaceProviderType } from '../utils/ZodTypes'
-import RoomAvailability from '../components/detail/RoomAvailability.vue'
+import { BlockMapType, RoomType, SpaceProviderType } from '../utils/ZodTypes'
+import { Label } from '../utils/labels'
+
+import { fetchSpaceProvider } from '../utils/query'
+import { getBlock } from '../components/detail/getBlock'
 
 export const useRoomStore = defineStore('rooms', {
   state: () => {
     return {
-      showDetail: ref(false),
-      //Has the app gotten a first page of results to display
-      appStarted: ref(false),
+
+      rooms: [] as RoomType[],
+      hasMoreRooms: true,
+      page: 0,
+      showDetail: false,
+      currDetailRoom: null as RoomType,
+
       //Keep track of the last query to determine if it changed or we're just
       //getting the next page so we can reset results
-      currQuery: ref(new String()),
-      //Each entry in this array is a page of results from SpaceProvider
-      currQueryResults: [] as SpaceProviderType[],
+      currQuery: new String(),
 
+      currFilters: [] as string[],
 
-      roomAvailability: [] as BlockMapType[],
-      roomAvailabilityLoading: ref(false),
-
-      // Stores the labels that have been toggled in Filter Menu
-      toggledLabels: [] as string[]
-
+      //Each entry in this array is a room availability calendar from BlockMap
+      roomAvailability: [] as BlockMapType[]
     }
   },
 
   getters: {
-    getPage: (state) => {
-      return (i: number) => state.currQueryResults[i]
-    },
-
-    getPageCount: (state) => {
-      return () => state.currQueryResults.length
-    },
-
+    // yonas note: consider localizing to RoomAvailability component
     getRoomAvailability: (state) => {
       return (room: string) => state.roomAvailability[room]
     },
 
-    isLoadingRoomAvailability: (state) => {
-      return state.roomAvailabilityLoading
+    getDetailRoom: (state) => {
+      return () => state.currDetailRoom
     }
   },
 
   actions: {
+    resetRoomStore() {
+      this.rooms = []
+      this.hasMoreRooms = true
+      this.page = 0
+    },
+
+    setDetailRoom(room: RoomType) {
+      this.currDetailRoom = room
+    },
+
+    // Queries SpaceProvider and pushed the new rooms
+    async updateRooms() {
+      const response = await fetchSpaceProvider(
+        this.currQuery.toString(),
+        this.currFilters,
+        ++this.page
+      )
+      const { page: paginationData, rooms: newRooms } = response
+      this.hasMoreRooms = !paginationData.last_page
+
+      // Query Blockmap for each room
+      for (const m_room of newRooms) {
+        const blockFetchRes = getBlock(m_room.building, m_room.room)
+        if ('ERROR' in blockFetchRes) {
+          console.log("error fetching blockmap")
+        }
+        m_room.availability = await blockFetchRes;
+      }
+
+      this.rooms.push(...newRooms)
+    },
+
     toggleDetail() {
       this.showDetail = !this.showDetail
     },
 
-    storePage(s: SpaceProviderType | null) {
-      if (s === null) return
-      //If the the current query isn't the same as the last one, reset the cached pages
-      if (s.options.query != this.currQuery.value) {
-        this.currQueryResults = new Array<SpaceProviderType>()
-        this.currQuery.value = s.options.query
-      }
-      this.currQueryResults.push(s)
-      this.appStarted = true
-    },
-
-
-    storeRoomAvailability(b: BlockMapType | null) {
-      if (b === null) return
-      console.log(`Storing ${b} from BlockMap`)
-      //Store the room availability in a map for easy access
-      this.roomAvailability[b.building_code + '_' + b.room_code] = b
-      //Tell the app the data is available to display
-      this.roomAvailabilityLoading = false
-    },
-
-    startLoadingRoomAvailability() {
-      this.roomAvailabilityLoading = true
-    },
-
-    toggleLabel(label: string) {
-      const currentIndex = this.toggledLabels.indexOf(label);
-      if (currentIndex == -1) {
-        this.toggledLabels.push(label);
-      } else {
-        this.toggledLabels.splice(currentIndex, 1);
-      }
-
+    clearRooms() {
+      this.page = 0
+      this.rooms = []
     }
   }
 })

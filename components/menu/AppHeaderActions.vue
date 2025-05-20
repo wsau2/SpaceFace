@@ -1,45 +1,45 @@
 <script setup lang="ts">
 import { ref, watch, Ref } from 'vue'
-import { useDebounceFn, useFetch } from '@vueuse/core'
-import MultiSelect from '../shared/MultiSelect.vue'
+import { useDebounceFn } from '@vueuse/core'
 import { useRoomStore } from '../../store/rooms'
 import { fetchSpaceProvider } from '../../utils/query'
+import FilterModal from './FilterModal.vue'
 
 const roomStore = useRoomStore()
 
-const options = [
-  { value: 1, label: 'map-marker-outline' },
-  { value: 2, label: 'star-outline' },
-  { value: 3, label: 'wheelchair-accessibility' }
-] as const
-
-type Value = (typeof options)[number]['value']
-
-const selectedFilter = ref<Value>(options[0].value)
-
+// Search bar stuff
 const searchActive = ref(false)
 const searchInput = ref<HTMLInputElement | null>(null)
+const searchText = ref('')
 
-const searchText = ref(null)
+// Filter Button stuff
+const filterActive = ref(false)
 
-watch(searchActive, (isActive) => {
-  if (isActive)
-    queueMicrotask(() => {
-      searchInput.value?.focus()
-    })
-})
+const focusSearchField = () => {
+  if (!searchActive.value) return
+  queueMicrotask(() => searchInput.value?.focus())
+}
 
-//Run the SpaceProvider Query after 2 sec of inactivity
-watch(
-  searchText,
-  useDebounceFn(() => {
-    fetchSpaceProvider(searchText.value).then((data) => roomStore.storePage(data))
-  }, 2000)
-)
+watch(searchActive, focusSearchField)
+
+// Two seconds after searchText is modified,
+// update currQuery to searchText in pinia,
+// clear rooms in pinia.
+// This causes the intersection handler to make a new query
+const callAPIWithSearchQuery = async () => {
+  roomStore.currQuery = searchText.value
+  roomStore.resetRoomStore()
+  roomStore.updateRooms()
+}
+
+const updateSearch = useDebounceFn(callAPIWithSearchQuery, 2000)
+
+watch(searchText, updateSearch)
 </script>
 
 <template>
   <div class="flex justify-between h-8">
+    <!-- Search Bar -->
     <div
       :class="[
         'bg-white text-black rounded-full flex items-center transition-all duration-300 ease-in-out flex items-center',
@@ -61,20 +61,24 @@ watch(
         v-model="searchText"
         ref="searchInput"
         type="text"
-        class="w-2/3 outline-transparent"
+        class="w-4/5 outline-transparent"
         placeholder="Search"
       />
     </div>
 
-    <MultiSelect
-      v-model="selectedFilter"
-      :options="options"
+    <!-- Filter Button -->
+    <button
+      class="rounded-full w-16 h-8 flex justify-center items-center bg-white text-black"
       :class="[
         !searchActive ? 'delay-100' : 'opacity-0',
-        'transition duration-200 ease-in-out w-[200px] absolute right-0'
+
+        'transition duration-200 ease-in-out absolute right-0'
       ]"
-      type="icon"
-    />
+      @click.stop="filterActive = !filterActive"
+    >
+      <mdicon name="filter" :size="searchActive ? 28 : 24" />
+    </button>
+
+    <FilterModal :isVisible="filterActive" @cancel="filterActive = false" />
   </div>
 </template>
-../../utils/query
